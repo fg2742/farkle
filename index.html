@@ -168,8 +168,9 @@
             flex-wrap: wrap;
             justify-content: center;
             margin-top: 8px;
+            min-height: 44px; /* reserve space for buttons so layout is locked */
         }
-
+        
         button {
             background: var(--btn);
             color: #fff;
@@ -178,25 +179,24 @@
             border-radius: 8px;
             font-weight: 700;
             cursor: pointer;
-            min-width: 110px;
+            width: 120px; /* all buttons same width */
             box-shadow: 0 6px 14px rgba(0,0,0,0.25);
         }
-
+        
         button.secondary {
             background: #37474f;
-            min-width: 120px;
         }
-
+        
         button.danger {
             background: var(--danger);
-            min-width: 120px;
         }
-
+        
         button:disabled {
             opacity: 0.45;
             cursor: not-allowed;
             box-shadow: none;
         }
+
 
         .message {
             margin-top: 12px;
@@ -274,7 +274,7 @@
         <div class="controls">
             <button id="rollBtn">Roll</button>
             <button id="bankBtn" class="secondary">Bank</button>
-            <button id="endBtn" class="danger" style="display:none;">End Turn</button>
+            <button id="endBtn" class="danger" style="visibility:hidden;">End Turn</button>
             <button id="newBtn" class="secondary">New Game</button>
         </div>
 
@@ -435,25 +435,23 @@
                 scoreboardEl.appendChild(el);
             });
         }
-
         function updateControls() {
             const rollBtn = document.getElementById('rollBtn');
             const bankBtn = document.getElementById('bankBtn');
             const endBtn = document.getElementById('endBtn');
-
-            if (farkled) {
-                rollBtn.disabled = true;
-                bankBtn.disabled = true;
-                endBtn.style.display = 'inline-block';
-                return;
+        
+            rollBtn.disabled = farkled;
+            bankBtn.disabled = farkled;
+        
+            // Show End Turn only if there's something to do or farkle happened
+            if (farkled || heldDice.length > 0 || tentativeSet.size > 0) {
+                endBtn.style.visibility = 'visible';
+                endBtn.disabled = false;
+            } else {
+                endBtn.style.visibility = 'hidden';
             }
-
-            rollBtn.disabled = false;
-            bankBtn.disabled = false;
-            endBtn.style.display = (heldDice.length > 0 || tentativeSet.size > 0)
-                ? 'inline-block'
-                : 'none';
         }
+
 
         function doRoll() {
             if (farkled) return;
