@@ -29,14 +29,14 @@ html, body {
 /* Header */
 header {
     position: relative;
-    top: 6px;  /* fixed distance from top */
+    top: 6px;
     margin: 0 auto 10px;
     max-width: 820px;
     width: 100%;
     display: flex;
-    justify-content: space-between; /* left/right alignment */
+    justify-content: space-between;
     align-items: center;
-    padding: 4px 14px; /* vertical 4px */
+    padding: 4px 14px;
 }
 
 h1 {
@@ -47,6 +47,16 @@ h1 {
 .label-bold {
     font-size: 20px;
     font-weight: bold;
+}
+
+/* Qualification message under round label */
+#qualificationInfo {
+    font-size: 14px;
+    text-align: right;
+    margin-top: 2px;
+    max-width: 820px;
+    width: 100%;
+    padding: 0 14px;
 }
 
 /* Main app container */
@@ -93,28 +103,33 @@ h1 {
 
 .dice-section { text-align: center; }
 
-.points-label {
-    font-size: 14px;
-    margin-bottom: 4px;
+/* Points labels */
+.points-label,
+.points-label span {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.2;
+    display: inline-block;
+    vertical-align: middle;
 }
 
+.points-label { margin-bottom: 8px; }
 
-/* Dice container wrapper (fixed width, centers dice) */
+/* Dice container wrapper */
 .dice-container-wrapper {
-    width: 252px;             /* fixed width for desktop */
+    width: 252px;
     margin: 0 auto;
     display: flex;
-    justify-content: center;   /* centers dice horizontally */
-    height: 56px;             /* fixed height matching dice roll container */
-    align-items: center;       /* vertically center dice */
+    justify-content: center;
+    height: 56px;
+    align-items: center;
 }
 
-/* Dice container inside wrapper */
+/* Dice container */
 .dice-container {
     display: flex;
     gap: 8px;
 }
-
 
 /* Dice visuals */
 .dice {
@@ -159,7 +174,16 @@ h1 {
     box-shadow: none;
 }
 
-/* Controls (buttons) */
+/* Turn/Pending points */
+#turnPoints,
+#pendingPoints {
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 18px !important;
+    line-height: 1.1;
+}
+
+/* Controls */
 .controls {
     display: flex;
     gap: 8px;
@@ -185,15 +209,16 @@ button.secondary { background: #37474f; }
 button.danger { background: var(--danger); }
 button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 
-/* Message + debug info */
-.message, #debug {
-    width: 252px;             /* fixed width to match dice container */
-    margin: 12px auto 0;      /* horizontally centered */
+/* Message */
+.message {
+    width: 252px;
+    margin: 12px auto 0;
     text-align: center;
     font-weight: 700;
     min-height: 24px;
 }
 
+/* Meta info */
 .meta {
     font-size: 13px;
     opacity: 0.9;
@@ -204,15 +229,27 @@ button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
     justify-content: center;
 }
 
+/* Bottom help text */
+#helpText {
+    text-align:center;
+    margin-top:20px;
+    margin-bottom:12px;
+    font-size:13px;
+    opacity:0.9;
+    line-height:1.4;
+}
+
 /* Mobile scaling */
 @media (max-width: 520px) {
     .dice-container-wrapper { 
         width: 204px; 
-        height: 46px;         /* 36px dice + 2×5px padding */
+        height: 46px;
     }
+    .dice { width: 36px; height: 36px; padding: 5px; }
+    .pip { width: 6px; height: 6px; }
+    .player { min-width: 96px; padding: 6px; }
+    button { min-width: 86px; padding: 8px 10px; }
 }
-
-
 </style>
 </head>
 
@@ -220,13 +257,18 @@ button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
   <!-- Header -->
   <header>
       <h1 class="label-bold">Farkle — 5 Dice</h1>
-      <div id="roundLabel" class="label-bold">Round 1</div>
+      <div>
+          <div id="roundLabel" class="label-bold">Round 1</div>
+          <div id="qualificationInfo"></div>
+      </div>
   </header>
 
   <!-- Main app container -->
   <div class="app">
+      <!-- Scoreboard -->
       <div class="scoreboard" id="scoreboard"></div>
 
+      <!-- Dice rows -->
       <div class="dice-rows">
           <!-- Held dice section -->
           <div class="dice-section">
@@ -245,11 +287,10 @@ button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
           </div>
       </div>
 
-      <div style="text-align:center; margin-top:4px;">
-          <small>Tap dice in current roll to select/unselect before committing with Roll, Bank, or End Turn.</small>
-      </div>
+      <!-- Turn message (above buttons) -->
+      <div class="message" id="message" style="margin-top:14px;"></div>
 
-      <!-- Buttons -->
+      <!-- Controls (buttons) -->
       <div class="controls">
           <button id="rollBtn">Roll</button>
           <button id="bankBtn" class="secondary">Bank</button>
@@ -257,93 +298,105 @@ button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
           <button id="newBtn" class="secondary">New Game</button>
       </div>
 
-      <!-- Messages and debug info -->
-      <div class="message" id="message"></div>
+      <!-- Meta info -->
       <div class="meta" id="meta"></div>
-      <div id="debug">Debug: <span id="debugText">—</span></div>
+
+      <!-- Bottom help text -->
+      <div id="helpText">
+          Tap dice in current roll to select/unselect before committing with Roll, Bank, or End Turn.
+      </div>
   </div>
+
+
 
 <script>
 // --------------------------
-// FARKLE 5-DICE GAME LOGIC
+// CONSTANTS
 // --------------------------
+const MIN_QUALIFY_POINTS = 600;
+const STRAIGHT_SCORE = 1500;
+const MAX_DICE = 5;
+const MESSAGE_TIMEOUT = 1500;
 
+// --------------------------
+// DOM REFERENCES
+// --------------------------
+const dom = {
+    heldContainer: document.getElementById('heldContainer'),
+    rollContainer: document.getElementById('rollContainer'),
+    turnPointsEl: document.getElementById('turnPoints'),
+    pendingPointsEl: document.getElementById('pendingPoints'),
+    messageEl: document.getElementById('message'),
+    scoreboardEl: document.getElementById('scoreboard'),
+    roundLabel: document.getElementById('roundLabel'),
+    qualificationEl: document.getElementById('qualificationInfo'),
+    rollBtn: document.getElementById('rollBtn'),
+    bankBtn: document.getElementById('bankBtn'),
+    endBtn: document.getElementById('endBtn'),
+    newBtn: document.getElementById('newBtn')
+};
+
+// --------------------------
+// Dice pip positions
+// --------------------------
+const pipMap = {
+    1: [[1,1]],
+    2: [[0,0],[2,2]],
+    3: [[0,0],[1,1],[2,2]],
+    4: [[0,0],[0,2],[2,0],[2,2]],
+    5: [[0,0],[0,2],[1,1],[2,0],[2,2]],
+    6: [[0,0],[0,2],[1,0],[1,2],[2,0],[2,2]]
+};
+
+// --------------------------
 // Game state
+// --------------------------
 let players = [], currentPlayer = 0, round = 1;
 let rolledDice = [], tentativeSet = new Set(), heldDice = [];
 let turnPoints = 0, hasRolledThisTurn = false, farkled = false;
 
-// DOM references
-const heldContainer = document.getElementById('heldContainer');
-const rollContainer = document.getElementById('rollContainer');
-const turnPointsEl = document.getElementById('turnPoints');
-const messageEl = document.getElementById('message');
-const scoreboardEl = document.getElementById('scoreboard');
-const roundLabel = document.getElementById('roundLabel');
-const debugText = document.getElementById('debugText');
-
 // --------------------------
 // Utility functions
 // --------------------------
-
-// Count occurrences of dice values
-function countsOf(arr) {
-    const c = [0, 0, 0, 0, 0, 0];
-    arr.forEach(v => c[v - 1]++);
-    return c;
-}
-
-// Score for triples
-function tripleValue(f) { return f === 1 ? 1000 : f * 100; }
-
-// Check straight (1-2-3-4-5 or 2-3-4-5-6)
-function checkStraight(roll) {
-    if (roll.length !== 5) return false;
-    const s = [...roll].sort((a, b) => a - b).join(',');
-    return s === '1,2,3,4,5' || s === '2,3,4,5,6';
-}
-
-// Check if any dice in roll are scoring dice
-function hasScoringDice(roll) {
-    if (roll.length === 0) return false;
-    if (roll.some(v => v === 1 || v === 5)) return true;
-    const c = countsOf(roll);
-    if (c.some(v => v >= 3)) return true;
-    if (roll.length === 5 && checkStraight(roll)) return true;
+const countsOf = arr => { const c=[0,0,0,0,0,0]; arr.forEach(v=>c[v-1]++); return c; }
+const tripleValue = f => f===1?1000:f*100;
+const checkStraight = roll => roll.length!==5 ? false : [...roll].sort((a,b)=>a-b).join(',')==='1,2,3,4,5'||[...roll].sort((a,b)=>a-b).join(',')==='2,3,4,5,6';
+const hasScoringDice = roll => {
+    if(roll.length===0) return false;
+    if(roll.some(v=>v===1||v===5)) return true;
+    const c=countsOf(roll);
+    if(c.some(v=>v>=3)) return true;
+    if(roll.length===5 && checkStraight(roll)) return true;
     return false;
 }
-
-// Random 1-6
-function rand1to6() { return Math.floor(Math.random() * 6) + 1; }
-
-// Set message
-function setMessage(msg) { messageEl.textContent = msg; }
+const rand1to6 = () => Math.floor(Math.random()*6)+1;
+const setMessage = msg => dom.messageEl.textContent = msg;
 
 // --------------------------
 // Game initialization
 // --------------------------
-
-function promptPlayers() {
-    let num = parseInt(prompt("Number of players (1-4):", "1"));
-    if (isNaN(num) || num < 1 || num > 4) num = 2;
-    players = [];
-    for (let i = 0; i < num; i++) {
-        let n = prompt(`Name for player ${i + 1}:`, `Player ${i + 1}`);
-        players.push({ name: n || `Player ${i + 1}`, score: 0, qualified: false });
+function promptPlayers(){
+    let num=parseInt(prompt("Number of players (1-4):","1"));
+    if(isNaN(num)||num<1||num>4) num=2;
+    players=[];
+    for(let i=0;i<num;i++){
+        let n=prompt(`Name for player ${i+1}:`,`Player ${i+1}`);
+        players.push({name:n||`Player ${i+1}`,score:0,qualified:false});
     }
-    currentPlayer = 0;
-    round = 1;
+    currentPlayer=0;
+    round=1;
     resetTurnState();
-    roundLabel.textContent = 'Round ' + round;
+    dom.roundLabel.textContent='Round '+round;
+    dom.qualificationEl.textContent='';
 }
 
-function resetTurnState() {
-    rolledDice = [];
+function resetTurnState(){
+    rolledDice=[];
     tentativeSet.clear();
-    heldDice = [];
-    turnPoints = 0;
-    hasRolledThisTurn = false;
-    farkled = false;
+    heldDice=[];
+    turnPoints=0;
+    hasRolledThisTurn=false;
+    farkled=false;
     setMessage(`${players[currentPlayer].name}'s turn — press Roll.`);
     renderAll();
 }
@@ -351,51 +404,38 @@ function resetTurnState() {
 // --------------------------
 // Scoring
 // --------------------------
-function calculateScore(dice) {
-    if (dice.length === 0) return 0;
-    const c = countsOf(dice);
-    let score = 0;
-
-    // 5-dice straight
-    if (dice.length === 5 && checkStraight(dice)) return 1500;
-
-    for (let i = 0; i < 6; i++) {
-        if (c[i] >= 3) {
-            let base = i === 0 ? 1000 : (i + 1) * 100;
-            if (c[i] === 4) score += base + Math.round(base * 0.5);
-            else if (c[i] >= 5) score += 2000;
-            else score += base;
+function calculateScore(dice){
+    if(dice.length===0) return 0;
+    const c=countsOf(dice);
+    let score=0;
+    if(dice.length===5 && checkStraight(dice)) return STRAIGHT_SCORE;
+    for(let i=0;i<6;i++){
+        if(c[i]>=3){
+            let base=i===0?1000:(i+1)*100;
+            if(c[i]===4) score+=base+Math.round(base*0.5);
+            else if(c[i]>=5) score+=2000;
+            else score+=base;
         }
     }
-
-    // Count remaining ones and fives
-    c[0] = c[0] >= 3 ? c[0] - 3 : c[0];
-    c[4] = c[4] >= 3 ? c[4] - 3 : c[4];
-    score += c[0] * 100 + c[4] * 50;
-
+    c[0]=c[0]>=3?c[0]-3:c[0];
+    c[4]=c[4]>=3?c[4]-3:c[4];
+    score+=c[0]*100 + c[4]*50;
     return score;
 }
 
 // --------------------------
 // Commit tentative dice
 // --------------------------
-function commitTentativeAndAward() {
-    if (tentativeSet.size === 0) return 0;
-
-    const newHeld = [], remainingDice = [];
-    rolledDice.forEach((die, i) => {
-        if (tentativeSet.has(i)) newHeld.push(die);
-        else remainingDice.push(die);
-    });
-
-    heldDice = heldDice.concat(newHeld);
-    rolledDice = remainingDice;
+function commitTentativeAndAward(){
+    if(tentativeSet.size===0) return 0;
+    const newHeld=[], remainingDice=[];
+    rolledDice.forEach((die,i)=>tentativeSet.has(i)?newHeld.push(die):remainingDice.push(die));
+    heldDice=heldDice.concat(newHeld);
+    rolledDice=remainingDice;
     tentativeSet.clear();
-
-    const award = calculateScore(newHeld);
-    turnPoints += award;
-    if (award > 0) setMessage(`Added ${award} points! Total this turn: ${turnPoints}`);
-
+    const award=calculateScore(newHeld);
+    turnPoints+=award;
+    if(award>0) setMessage(`Added ${award} points! Total this turn: ${turnPoints}`);
     renderAll();
     return award;
 }
@@ -403,33 +443,24 @@ function commitTentativeAndAward() {
 // --------------------------
 // Render dice
 // --------------------------
-function renderDice(container, diceArr, highlightSet, isLocked = false) {
-    container.innerHTML = '';
-    diceArr.forEach((v, i) => {
-        const el = document.createElement('div');
-        el.className = 'dice';
-        if (isLocked) el.classList.add('locked');
-        else if (highlightSet.has(i)) el.classList.add('tentative');
-
-        if (!isLocked) { el.dataset.idx = i; el.onclick = () => toggleTentative(i); }
-
-        // Create pips
-        const pipMap = {
-            1: [[1, 1]],
-            2: [[0, 0], [2, 2]],
-            3: [[0, 0], [1, 1], [2, 2]],
-            4: [[0, 0], [0, 2], [2, 0], [2, 2]],
-            5: [[0, 0], [0, 2], [1, 1], [2, 0], [2, 2]],
-            6: [[0, 0], [0, 2], [1, 0], [1, 2], [2, 0], [2, 2]]
-        };
-        pipMap[v].forEach(([r, c]) => {
-            const pip = document.createElement('div');
-            pip.className = 'pip';
-            pip.style.gridRowStart = r + 1;
-            pip.style.gridColumnStart = c + 1;
+function renderDice(container,diceArr,highlightSet,isLocked=false){
+    container.innerHTML='';
+    diceArr.forEach((v,i)=>{
+        const el=document.createElement('div');
+        el.className='dice';
+        if(isLocked) el.classList.add('locked');
+        else if(highlightSet.has(i)) el.classList.add('tentative');
+        if(!isLocked){
+            el.dataset.idx=i;
+            el.addEventListener('click',()=>toggleTentative(i));
+        }
+        pipMap[v].forEach(([r,c])=>{
+            const pip=document.createElement('div');
+            pip.className='pip';
+            pip.style.gridRowStart=r+1;
+            pip.style.gridColumnStart=c+1;
             el.appendChild(pip);
         });
-
         container.appendChild(el);
     });
 }
@@ -437,67 +468,46 @@ function renderDice(container, diceArr, highlightSet, isLocked = false) {
 // --------------------------
 // Render all
 // --------------------------
-function renderAll() {
-    renderDice(heldContainer, heldDice, new Set(), true);
-    renderDice(rollContainer, rolledDice, tentativeSet);
-    turnPointsEl.textContent = turnPoints;
-
-    const tentativeDice = [...tentativeSet].map(i => rolledDice[i]);
-    document.getElementById('pendingPoints').textContent = calculateScore(tentativeDice);
-
+function renderAll(){
+    renderDice(dom.heldContainer,heldDice,new Set(),true);
+    renderDice(dom.rollContainer,rolledDice,tentativeSet);
+    dom.turnPointsEl.textContent=turnPoints;
+    const tentativeDice=[...tentativeSet].map(i=>rolledDice[i]);
+    dom.pendingPointsEl.textContent=calculateScore(tentativeDice);
     renderScoreboard();
     updateControls();
-    updateDebug();
 }
 
 // --------------------------
 // Render scoreboard
 // --------------------------
-function renderScoreboard() {
-    scoreboardEl.innerHTML = '';
-    players.forEach((p, i) => {
-        const el = document.createElement('div');
-        el.className = 'player' + (i === currentPlayer ? ' current' : '');
-        el.innerHTML = `<div class="name">${p.name}</div><div class="score">${p.score}</div>`;
-        scoreboardEl.appendChild(el);
+function renderScoreboard(){
+    dom.scoreboardEl.innerHTML='';
+    players.forEach((p,i)=>{
+        const el=document.createElement('div');
+        el.className='player'+(i===currentPlayer?' current':'');
+        el.innerHTML=`<div class="name">${p.name}</div><div class="score">${p.score}</div>`;
+        dom.scoreboardEl.appendChild(el);
     });
 }
 
 // --------------------------
 // Update buttons
 // --------------------------
-function updateControls() {
-    const rollBtn = document.getElementById('rollBtn');
-    const bankBtn = document.getElementById('bankBtn');
-    const endBtn = document.getElementById('endBtn');
-
-    rollBtn.disabled = farkled;
-    bankBtn.disabled = farkled;
-
-    if (farkled || heldDice.length > 0 || tentativeSet.size > 0) {
-        endBtn.style.visibility = 'visible';
-        endBtn.disabled = false;
-    } else {
-        endBtn.style.visibility = 'hidden';
-    }
-}
-
-// --------------------------
-// Debug info
-// --------------------------
-function updateDebug() {
-    const counts = countsOf(rolledDice);
-    const tentativeDice = [...tentativeSet].map(i => rolledDice[i]);
-    const scoreIfHeld = calculateScore(tentativeDice);
-    const totalIfHeldPlusPending = turnPoints + scoreIfHeld;
-    debugText.textContent = `Rolled: [${rolledDice.join(', ')}], Counts: [${counts.join(', ')}], Score if held: ${scoreIfHeld}, Total if held + pending: ${totalIfHeldPlusPending}`;
+function updateControls(){
+    dom.rollBtn.disabled = farkled;
+    dom.bankBtn.disabled = farkled;
+    if(farkled || heldDice.length>0 || tentativeSet.size>0){
+        dom.endBtn.style.visibility='visible';
+        dom.endBtn.disabled=false;
+    } else dom.endBtn.style.visibility='hidden';
 }
 
 // --------------------------
 // Toggle tentative dice
 // --------------------------
-function toggleTentative(idx) {
-    if (idx < 0 || idx >= rolledDice.length) return;
+function toggleTentative(idx){
+    if(idx<0 || idx>=rolledDice.length) return;
     tentativeSet.has(idx) ? tentativeSet.delete(idx) : tentativeSet.add(idx);
     renderAll();
 }
@@ -505,49 +515,40 @@ function toggleTentative(idx) {
 // --------------------------
 // Roll dice
 // --------------------------
-function doRoll() {
-    if (farkled) return;
-
+function doRoll(){
+    if(farkled) return;
     commitTentativeAndAward();
-
-    // If all dice held, reset
-    if (heldDice.length === 5) heldDice = [];
-
-    const toRoll = 5 - heldDice.length;
-    rolledDice = [];
-    for (let i = 0; i < toRoll; i++) rolledDice.push(rand1to6());
-
+    if(heldDice.length===MAX_DICE) heldDice=[];
+    const toRoll = MAX_DICE - heldDice.length;
+    rolledDice=[];
+    for(let i=0;i<toRoll;i++) rolledDice.push(rand1to6());
     tentativeSet.clear();
-
-    if (!hasScoringDice(rolledDice)) {
-        farkled = true;
+    if(!hasScoringDice(rolledDice)){
+        farkled=true;
         setMessage("You rolled a Farkle! Click End Turn.");
-    } else {
-        setMessage(`${players[currentPlayer].name}'s turn — select dice and Roll/Bank.`);
-    }
-
-    hasRolledThisTurn = true;
+    } else setMessage(`${players[currentPlayer].name}'s turn — select dice and Roll/Bank.`);
+    hasRolledThisTurn=true;
     renderAll();
 }
 
 // --------------------------
 // Bank points
 // --------------------------
-function bankTurn() {
+function bankTurn(){
     commitTentativeAndAward();
-    const player = players[currentPlayer];
-    if (!player.qualified) {
-        if (turnPoints >= 600) {
-            player.qualified = true;
-            player.score += turnPoints;
-            setMessage(`${player.name} qualified with ${turnPoints} points!`);
+    const player=players[currentPlayer];
+    if(!player.qualified){
+        if(turnPoints>=MIN_QUALIFY_POINTS){
+            player.qualified=true;
+            player.score+=turnPoints;
+            showQualificationMessage(`${player.name} qualified with ${turnPoints} points!`);
             nextPlayerAfterEnd();
         } else {
-            setMessage(`${player.name} needs at least 600 points to qualify.`);
+            showQualificationMessage(`${player.name} needs at least ${MIN_QUALIFY_POINTS} points to qualify — no points added.`);
         }
         return;
     }
-    player.score += turnPoints;
+    player.score+=turnPoints;
     setMessage(`${player.name} banked ${turnPoints} points.`);
     nextPlayerAfterEnd();
 }
@@ -555,39 +556,45 @@ function bankTurn() {
 // --------------------------
 // End turn
 // --------------------------
-function endTurn() {
-    if (farkled) {
+function endTurn(){
+    if(farkled){
         setMessage(`${players[currentPlayer].name} Farkled! No points added.`);
-        turnPoints = 0;
+        turnPoints=0;
         nextPlayerAfterEnd();
         return;
     }
     commitTentativeAndAward();
-    const player = players[currentPlayer];
-    if (!player.qualified) {
-        if (turnPoints >= 600) {
-            player.qualified = true;
-            player.score += turnPoints;
-            setMessage(`${player.name} qualified with ${turnPoints} points!`);
-        } else {
-            setMessage(`${player.name} needs at least 600 points to qualify — no points added.`);
-        }
+    const player=players[currentPlayer];
+    if(!player.qualified){
+        if(turnPoints>=MIN_QUALIFY_POINTS){
+            player.qualified=true;
+            player.score+=turnPoints;
+            showQualificationMessage(`${player.name} qualified with ${turnPoints} points!`);
+        } else showQualificationMessage(`${player.name} needs at least ${MIN_QUALIFY_POINTS} points to qualify — no points added.`);
         nextPlayerAfterEnd();
         return;
     }
-    player.score += turnPoints;
+    player.score+=turnPoints;
     setMessage(`${player.name} ends turn with ${turnPoints} points!`);
     nextPlayerAfterEnd();
 }
 
 // --------------------------
+// Qualification message under round label
+// --------------------------
+function showQualificationMessage(msg){
+    dom.qualificationEl.textContent = msg;
+    setTimeout(()=>{ dom.qualificationEl.textContent=''; }, MESSAGE_TIMEOUT);
+}
+
+// --------------------------
 // Next player
 // --------------------------
-function nextPlayerAfterEnd() {
-    currentPlayer = (currentPlayer + 1) % players.length;
-    if (currentPlayer === 0) {
+function nextPlayerAfterEnd(){
+    currentPlayer=(currentPlayer+1)%players.length;
+    if(currentPlayer===0){
         round++;
-        roundLabel.textContent = 'Round ' + round;
+        dom.roundLabel.textContent='Round '+round;
     }
     resetTurnState();
 }
@@ -595,14 +602,323 @@ function nextPlayerAfterEnd() {
 // --------------------------
 // Initialize game on page load
 // --------------------------
-window.onload = function() {
-    document.getElementById('rollBtn').onclick = doRoll;
-    document.getElementById('bankBtn').onclick = bankTurn;
-    document.getElementById('endBtn').onclick = endTurn;
-    document.getElementById('newBtn').onclick = promptPlayers;
+document.addEventListener('DOMContentLoaded', ()=>{
+    dom.rollBtn.addEventListener('click', doRoll);
+    dom.bankBtn.addEventListener('click', bankTurn);
+    dom.endBtn.addEventListener('click', endTurn);
+    dom.newBtn.addEventListener('click', promptPlayers);
 
     promptPlayers();
-}
+});
 </script>
+
+</body>
+</html>
+
+  </div>
+
+<script>
+// --------------------------
+// CONSTANTS
+// --------------------------
+const MIN_QUALIFY_POINTS = 600;
+const STRAIGHT_SCORE = 1500;
+const MAX_DICE = 5;
+const MESSAGE_TIMEOUT = 1500;
+
+// --------------------------
+// DOM REFERENCES
+// --------------------------
+const dom = {
+    heldContainer: document.getElementById('heldContainer'),
+    rollContainer: document.getElementById('rollContainer'),
+    turnPointsEl: document.getElementById('turnPoints'),
+    pendingPointsEl: document.getElementById('pendingPoints'),
+    messageEl: document.getElementById('message'),
+    scoreboardEl: document.getElementById('scoreboard'),
+    roundLabel: document.getElementById('roundLabel'),
+    qualificationEl: document.getElementById('qualificationInfo'),
+    rollBtn: document.getElementById('rollBtn'),
+    bankBtn: document.getElementById('bankBtn'),
+    endBtn: document.getElementById('endBtn'),
+    newBtn: document.getElementById('newBtn')
+};
+
+// --------------------------
+// Dice pip positions
+// --------------------------
+const pipMap = {
+    1: [[1,1]],
+    2: [[0,0],[2,2]],
+    3: [[0,0],[1,1],[2,2]],
+    4: [[0,0],[0,2],[2,0],[2,2]],
+    5: [[0,0],[0,2],[1,1],[2,0],[2,2]],
+    6: [[0,0],[0,2],[1,0],[1,2],[2,0],[2,2]]
+};
+
+// --------------------------
+// Game state
+// --------------------------
+let players = [], currentPlayer = 0, round = 1;
+let rolledDice = [], tentativeSet = new Set(), heldDice = [];
+let turnPoints = 0, hasRolledThisTurn = false, farkled = false;
+
+// --------------------------
+// Utility functions
+// --------------------------
+const countsOf = arr => { const c=[0,0,0,0,0,0]; arr.forEach(v=>c[v-1]++); return c; }
+const tripleValue = f => f===1?1000:f*100;
+const checkStraight = roll => roll.length!==5 ? false : [...roll].sort((a,b)=>a-b).join(',')==='1,2,3,4,5'||[...roll].sort((a,b)=>a-b).join(',')==='2,3,4,5,6';
+const hasScoringDice = roll => {
+    if(roll.length===0) return false;
+    if(roll.some(v=>v===1||v===5)) return true;
+    const c=countsOf(roll);
+    if(c.some(v=>v>=3)) return true;
+    if(roll.length===5 && checkStraight(roll)) return true;
+    return false;
+}
+const rand1to6 = () => Math.floor(Math.random()*6)+1;
+const setMessage = msg => dom.messageEl.textContent = msg;
+
+// --------------------------
+// Game initialization
+// --------------------------
+function promptPlayers(){
+    let num=parseInt(prompt("Number of players (1-4):","1"));
+    if(isNaN(num)||num<1||num>4) num=2;
+    players=[];
+    for(let i=0;i<num;i++){
+        let n=prompt(`Name for player ${i+1}:`,`Player ${i+1}`);
+        players.push({name:n||`Player ${i+1}`,score:0,qualified:false});
+    }
+    currentPlayer=0;
+    round=1;
+    resetTurnState();
+    dom.roundLabel.textContent='Round '+round;
+    dom.qualificationEl.textContent='';
+}
+
+function resetTurnState(){
+    rolledDice=[];
+    tentativeSet.clear();
+    heldDice=[];
+    turnPoints=0;
+    hasRolledThisTurn=false;
+    farkled=false;
+    setMessage(`${players[currentPlayer].name}'s turn — press Roll.`);
+    renderAll();
+}
+
+// --------------------------
+// Scoring
+// --------------------------
+function calculateScore(dice){
+    if(dice.length===0) return 0;
+    const c=countsOf(dice);
+    let score=0;
+    if(dice.length===5 && checkStraight(dice)) return STRAIGHT_SCORE;
+    for(let i=0;i<6;i++){
+        if(c[i]>=3){
+            let base=i===0?1000:(i+1)*100;
+            if(c[i]===4) score+=base+Math.round(base*0.5);
+            else if(c[i]>=5) score+=2000;
+            else score+=base;
+        }
+    }
+    c[0]=c[0]>=3?c[0]-3:c[0];
+    c[4]=c[4]>=3?c[4]-3:c[4];
+    score+=c[0]*100 + c[4]*50;
+    return score;
+}
+
+// --------------------------
+// Commit tentative dice
+// --------------------------
+function commitTentativeAndAward(){
+    if(tentativeSet.size===0) return 0;
+    const newHeld=[], remainingDice=[];
+    rolledDice.forEach((die,i)=>tentativeSet.has(i)?newHeld.push(die):remainingDice.push(die));
+    heldDice=heldDice.concat(newHeld);
+    rolledDice=remainingDice;
+    tentativeSet.clear();
+    const award=calculateScore(newHeld);
+    turnPoints+=award;
+    if(award>0) setMessage(`Added ${award} points! Total this turn: ${turnPoints}`);
+    renderAll();
+    return award;
+}
+
+// --------------------------
+// Render dice
+// --------------------------
+function renderDice(container,diceArr,highlightSet,isLocked=false){
+    container.innerHTML='';
+    diceArr.forEach((v,i)=>{
+        const el=document.createElement('div');
+        el.className='dice';
+        if(isLocked) el.classList.add('locked');
+        else if(highlightSet.has(i)) el.classList.add('tentative');
+        if(!isLocked){
+            el.dataset.idx=i;
+            el.addEventListener('click',()=>toggleTentative(i));
+        }
+        pipMap[v].forEach(([r,c])=>{
+            const pip=document.createElement('div');
+            pip.className='pip';
+            pip.style.gridRowStart=r+1;
+            pip.style.gridColumnStart=c+1;
+            el.appendChild(pip);
+        });
+        container.appendChild(el);
+    });
+}
+
+// --------------------------
+// Render all
+// --------------------------
+function renderAll(){
+    renderDice(dom.heldContainer,heldDice,new Set(),true);
+    renderDice(dom.rollContainer,rolledDice,tentativeSet);
+    dom.turnPointsEl.textContent=turnPoints;
+    const tentativeDice=[...tentativeSet].map(i=>rolledDice[i]);
+    dom.pendingPointsEl.textContent=calculateScore(tentativeDice);
+    renderScoreboard();
+    updateControls();
+}
+
+// --------------------------
+// Render scoreboard
+// --------------------------
+function renderScoreboard(){
+    dom.scoreboardEl.innerHTML='';
+    players.forEach((p,i)=>{
+        const el=document.createElement('div');
+        el.className='player'+(i===currentPlayer?' current':'');
+        el.innerHTML=`<div class="name">${p.name}</div><div class="score">${p.score}</div>`;
+        dom.scoreboardEl.appendChild(el);
+    });
+}
+
+// --------------------------
+// Update buttons
+// --------------------------
+function updateControls(){
+    dom.rollBtn.disabled = farkled;
+    dom.bankBtn.disabled = farkled;
+    if(farkled || heldDice.length>0 || tentativeSet.size>0){
+        dom.endBtn.style.visibility='visible';
+        dom.endBtn.disabled=false;
+    } else dom.endBtn.style.visibility='hidden';
+}
+
+// --------------------------
+// Toggle tentative dice
+// --------------------------
+function toggleTentative(idx){
+    if(idx<0 || idx>=rolledDice.length) return;
+    tentativeSet.has(idx) ? tentativeSet.delete(idx) : tentativeSet.add(idx);
+    renderAll();
+}
+
+// --------------------------
+// Roll dice
+// --------------------------
+function doRoll(){
+    if(farkled) return;
+    commitTentativeAndAward();
+    if(heldDice.length===MAX_DICE) heldDice=[];
+    const toRoll = MAX_DICE - heldDice.length;
+    rolledDice=[];
+    for(let i=0;i<toRoll;i++) rolledDice.push(rand1to6());
+    tentativeSet.clear();
+    if(!hasScoringDice(rolledDice)){
+        farkled=true;
+        setMessage("You rolled a Farkle! Click End Turn.");
+    } else setMessage(`${players[currentPlayer].name}'s turn — select dice and Roll/Bank.`);
+    hasRolledThisTurn=true;
+    renderAll();
+}
+
+// --------------------------
+// Bank points
+// --------------------------
+function bankTurn(){
+    commitTentativeAndAward();
+    const player=players[currentPlayer];
+    if(!player.qualified){
+        if(turnPoints>=MIN_QUALIFY_POINTS){
+            player.qualified=true;
+            player.score+=turnPoints;
+            showQualificationMessage(`${player.name} qualified with ${turnPoints} points!`);
+            nextPlayerAfterEnd();
+        } else {
+            showQualificationMessage(`${player.name} needs at least ${MIN_QUALIFY_POINTS} points to qualify — no points added.`);
+        }
+        return;
+    }
+    player.score+=turnPoints;
+    setMessage(`${player.name} banked ${turnPoints} points.`);
+    nextPlayerAfterEnd();
+}
+
+// --------------------------
+// End turn
+// --------------------------
+function endTurn(){
+    if(farkled){
+        setMessage(`${players[currentPlayer].name} Farkled! No points added.`);
+        turnPoints=0;
+        nextPlayerAfterEnd();
+        return;
+    }
+    commitTentativeAndAward();
+    const player=players[currentPlayer];
+    if(!player.qualified){
+        if(turnPoints>=MIN_QUALIFY_POINTS){
+            player.qualified=true;
+            player.score+=turnPoints;
+            showQualificationMessage(`${player.name} qualified with ${turnPoints} points!`);
+        } else showQualificationMessage(`${player.name} needs at least ${MIN_QUALIFY_POINTS} points to qualify — no points added.`);
+        nextPlayerAfterEnd();
+        return;
+    }
+    player.score+=turnPoints;
+    setMessage(`${player.name} ends turn with ${turnPoints} points!`);
+    nextPlayerAfterEnd();
+}
+
+// --------------------------
+// Qualification message under round label
+// --------------------------
+function showQualificationMessage(msg){
+    dom.qualificationEl.textContent = msg;
+    setTimeout(()=>{ dom.qualificationEl.textContent=''; }, MESSAGE_TIMEOUT);
+}
+
+// --------------------------
+// Next player
+// --------------------------
+function nextPlayerAfterEnd(){
+    currentPlayer=(currentPlayer+1)%players.length;
+    if(currentPlayer===0){
+        round++;
+        dom.roundLabel.textContent='Round '+round;
+    }
+    resetTurnState();
+}
+
+// --------------------------
+// Initialize game on page load
+// --------------------------
+document.addEventListener('DOMContentLoaded', ()=>{
+    dom.rollBtn.addEventListener('click', doRoll);
+    dom.bankBtn.addEventListener('click', bankTurn);
+    dom.endBtn.addEventListener('click', endTurn);
+    dom.newBtn.addEventListener('click', promptPlayers);
+
+    promptPlayers();
+});
+</script>
+
 </body>
 </html>
